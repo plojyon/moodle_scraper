@@ -11,7 +11,7 @@ import os;
 USERNAME = int(os.getenv("USERNAME"));
 PASSWORD = int(os.getenv("PASSWORD"));
 
-fmf = {
+fmf = { 
 	"URL": {
 		"login":  "https://ucilnica.fmf.uni-lj.si/login/index.php",
 		"course": "https://ucilnica.fmf.uni-lj.si/course/view.php?id=", # append course id
