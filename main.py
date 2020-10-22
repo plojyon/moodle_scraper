@@ -1,5 +1,6 @@
 from datetime import datetime;
 from bs4 import BeautifulSoup;
+from flask import Flask, json, request
 import datetime;
 import requests;
 import json;
@@ -7,6 +8,8 @@ import random;
 import time;
 import re; #regex
 import os;
+
+app = Flask(__name__);
 
 USERNAME = os.getenv("USERNAME");
 PASSWORD = os.getenv("PASSWORD");
