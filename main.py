@@ -1,14 +1,15 @@
 USERNAME = int(os.getenv("USERNAME"));
 PASSWORD = int(os.getenv("PASSWORD"));
 
-from datetime import datetime
-from bs4 import BeautifulSoup
+from datetime import datetime;
+from bs4 import BeautifulSoup;
 import datetime;
-import requests
-import json
-import random
-import time
-import re #regex
+import requests;
+import json;
+import random;
+import time;
+import re; #regex
+import os;
 
 fmf = {
 	"URL": {
