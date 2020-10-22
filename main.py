@@ -8,11 +8,10 @@ import random;
 import time;
 import re; #regex
 import os;
-
+from boto.s3.connection import S3Connection; # for env variables on heroku
 app = Flask(__name__);
 
-USERNAME = os.getenv("USERNAME");
-PASSWORD = os.getenv("PASSWORD");
+USERNAME, PASSWORD = S3Connection(os.environ['USERNAME'], os.environ['PASSWORD']);
 
 fmf = {
 	"URL": {
@@ -235,28 +234,17 @@ def get_post_details():
 
 @app.errorhandler(500)
 def err500(e):
-	if (not production):
-		return json.dumps([{"error": "500", "e": e}]);
-	else:
-		return json.dumps([{"error": "500"}]);
+	return json.dumps([{"error": "500"}]);
 
 @app.errorhandler(404)
 def err404(e):
-	if (not production):
-		return json.dumps([{"error": "404", "e": e}]);
-	else:
-		return json.dumps([{"error": "404"}]);
+	return json.dumps([{"error": "404"}]);
 
-
-production = os.getenv("DEBUG") == '0';
-if not production:
-	print("Running in debug mode. Do not deploy in this state.");
 
 if __name__ == '__main__':
 	try:
-		PORT = int(os.getenv("PORT"));
+		PORT = S3Connection(os.environ['PORT'])
 	except:
 		PORT = 5000;
-	if not PORT: PORT = 5000;
 	print("Using port "+str(PORT));
 	app.run(port=PORT);
