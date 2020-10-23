@@ -194,7 +194,7 @@ def get_forums():
 		abbr = faks["courses"][course_id]["abbr"];
 		if filter_abbr and abbr != filter_abbr: continue;
 		forums[abbr] = find_forums(faks["URL"]["course"]+str(course_id), faks["cookie"]);
-	return forums;
+	return json.dumps(forums);
 
 @app.route('/getPosts', methods=['GET'])
 def get_posts():
@@ -212,7 +212,7 @@ def get_posts():
 
 	faks["cookie"] = get_cookie(faks["URL"]["login"]);
 	posts = find_posts(faks["URL"]["forum"]+str(forum_id), faks["cookie"]);
-	return posts;
+	return json.dumps(posts);
 
 @app.route('/getPostDetails', methods=['GET'])
 def get_post_details():
@@ -230,7 +230,7 @@ def get_post_details():
 
 	faks["cookie"] = get_cookie(faks["URL"]["login"]);
 	details = find_details(faks["URL"]["discussion"]+str(post_id), faks["cookie"]);
-	return details;
+	return json.dumps(details);
 
 
 @app.errorhandler(500)
