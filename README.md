@@ -1,6 +1,8 @@
 # moodle_scraper
 A moodle scraper API that allows you to browse fmf and fri moodle forums in JSON
 
+API available at [Heroku](https://fmf-fri-moodle-scraper.herokuapp.com/)
+
 Endpoints:
 ```
   /getForums
