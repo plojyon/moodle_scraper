@@ -80,7 +80,7 @@ def find_posts(forum_url, cookie):
 	soup = BeautifulSoup(c, 'html.parser');
 	table = soup.find_all(class_="table discussion-list");
 	if len(table) == 0:
-		print("Could not find a table at "+course_url);
+		print("Could not find a table at "+forum_url);
 		return [];
 	entries = table[0].find('tbody').find_all('tr');
 	posts = [];
