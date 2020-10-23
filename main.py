@@ -8,10 +8,11 @@ import random;
 import time;
 import re; #regex
 import os;
-from boto.s3.connection import S3Connection; # for env variables on heroku
 app = Flask(__name__);
 
-USERNAME, PASSWORD = S3Connection(os.environ['USERNAME'], os.environ['PASSWORD']);
+USERNAME = os.environ.get('USERNAME');
+PASSWORD = os.environ.get('PASSWORD');
+print("Using credentials of "+USERNAME);
 
 fmf = {
 	"URL": {
@@ -243,7 +244,7 @@ def err404(e):
 
 if __name__ == '__main__':
 	try:
-		PORT = S3Connection(os.environ['PORT'])
+		PORT = int(os.environ.get('PORT', 5000));
 	except:
 		PORT = 5000;
 	print("Using port "+str(PORT));
