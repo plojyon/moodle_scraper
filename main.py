@@ -1,6 +1,6 @@
 from datetime import datetime;
 from bs4 import BeautifulSoup;
-from flask import Flask, json, request
+from flask import Flask, json, request;
 import datetime;
 import requests;
 import json;
@@ -14,14 +14,8 @@ USERNAME = os.environ.get('USERNAME');
 PASSWORD = os.environ.get('PASSWORD');
 print("Using credentials of "+USERNAME);
 
-fmf = {
-	"URL": {
-		"login":  "https://ucilnica.fmf.uni-lj.si/login/index.php",
-		"course": "https://ucilnica.fmf.uni-lj.si/course/view.php?id=", # append course id
-		"forum":  "https://ucilnica.fmf.uni-lj.si/mod/forum/view.php?id=", # append forum id
-		"discussion": "https://ucilnica.fmf.uni-lj.si/mod/forum/discuss.php?d=" # append discussion id
-	},
-	"courses": {
+courses = {
+	"fmf": {
 		75: {
 			"name": "Analiza 1",
 			"abbr": "A1"
@@ -34,27 +28,32 @@ fmf = {
 			"name": "Linearna algebra",
 			"abbr": "LINALG"
 		}
-	}
-}
-
-fri = {
-	"URL": {
-		"login":  "https://ucilnica.fri.uni-lj.si/login/index.php",
-		"course": "https://ucilnica.fri.uni-lj.si/course/view.php?id=", # append course id
-		"forum":  "https://ucilnica.fri.uni-lj.si/mod/forum/view.php?id=", # append forum id
-		"discussion": "https://ucilnica.fri.uni-lj.si/mod/forum/discuss.php?d=" # append discussion id
 	},
- 	"courses": {
+	"fri": {
 		46: {
 			"name": "Osnove digitalnih vezij",
 			"abbr": "ODV"
 		},
-		45: {
+		389: { # used to be 45
 			"name": "Programiranje 1",
 			"abbr": "P1"
 		}
 	}
 }
+
+urls = {
+	"login":  "/login/index.php",
+	"course": "/course/view.php?id=", # append course id
+	"forum":  "/mod/forum/view.php?id=", # append id
+	"assign":  "/mod/assign/view.php?id=", # append id
+	"quiz":  "/mod/quiz/view.php?id=", # append id
+	"discussion": "/mod/forum/discuss.php?d=" # ?d= is NOT a typo!
+}
+
+cookies = {"fri": "", "fmf": ""}
+
+def url(location, type, id=""):
+	return "https://ucilnica."+location+".uni-lj.si"+urls[type]+str(id);
 
 def find_forums(course_url, cookie):
 	c = requests.get(course_url, headers={"Cookie":cookie}).content.decode("utf-8");
@@ -62,10 +61,10 @@ def find_forums(course_url, cookie):
 	anchors = soup.find_all('a', href=True);
 	forums = [];
 	for a in anchors:
-		if "/mod/forum/view.php?id=" in a["href"]:
+		if urls["forum"] in a["href"]:
 			if "#unread" in a["href"]: continue;
 			try:
-				id = re.search(r"/mod/forum/view.php\?id=(\d+)", a["href"])[1];
+				id = re.search(re.escape(urls["forum"])+r"(\d+)", a["href"])[1];
 				title = a.find(class_="instancename").text;
 			except:
 				title = id = "error";
@@ -88,13 +87,13 @@ def find_posts(forum_url, cookie):
 		title = author = timestamp = 0;
 		try:
 			title = entry.find(class_="topic").find('a').text.strip();
-			id = re.search(r"/mod/forum/discuss\.php\?d=(\d+)", entry.find(class_="topic").find('a')["href"])[1];
+			id = re.search(re.escape(urls["discussion"])+r"(\d+)", entry.find(class_="topic").find('a')["href"])[1];
 			author = entry.find(class_="author").find(class_="author-info").find('div').text.strip();
 			timestamp = entry.find('time')["data-timestamp"];
 		except:
 			title = id = author = timestamp = "error";
 
-		posts.append({"title": title, "id": id, "author": author, "timestamp": timestamp});
+		posts.append({"title": title, "id": id, "author": author, "last_submission": timestamp});
 
 	if (len(posts) == 0):
 		print("No results. Invalid credentials or forum has no posts? Forum: "+forum_url);
@@ -163,6 +162,7 @@ def get_cookie(login_url):
 	session = requests.Session();
 	resp = session.get(login_url).content.decode("utf-8");
 	token = re.search(r'name="logintoken" value="(\w+)"', resp)[1];
+	print("Got login token: "+token)
 	login_data = {
 		"username":USERNAME,
 		"password":PASSWORD,
@@ -177,59 +177,46 @@ def get_cookie(login_url):
 	print("Got login cookie: "+cookie);
 	return cookie;
 
-@app.route('/getForums', methods=['GET'])
-def get_forums():
-	location = request.args.get('location', default="", type=str);
+@app.route('/getAssignments', methods=['GET'])
+def get_assignments():
+	return '{"error": "todo"}';
+
+@app.route('/getForumList', methods=['GET'])
+def get_forum_list():
+	faks = request.args.get('location', default="", type=str);
 	filter_abbr = request.args.get('abbr', default="", type=str);
-	if location == "fmf":
-		faks = fmf;
-	elif location == "fri":
-		faks = fri;
-	else:
-		return '{"error": "Invalid location"}';
+	if (faks != "fri" and faks != "fmf"): return '{"error": "Invalid location"}';
 
 	forums = {};
-	faks["cookie"] = get_cookie(faks["URL"]["login"]);
-	for course_id in faks["courses"]:
-		abbr = faks["courses"][course_id]["abbr"];
+	cookies[faks] = get_cookie(url(faks, "login"));
+	for course_id in courses[faks]:
+		abbr = courses[faks][course_id]["abbr"];
 		if filter_abbr and abbr != filter_abbr: continue;
-		forums[abbr] = find_forums(faks["URL"]["course"]+str(course_id), faks["cookie"]);
+		forums[abbr] = find_forums(url(faks,"course",course_id), cookies[faks]);
 	return json.dumps(forums);
 
-@app.route('/getPosts', methods=['GET'])
-def get_posts():
-	location = request.args.get('location', default="", type=str);
+@app.route('/getForum', methods=['GET'])
+def get_forum():
+	faks = request.args.get('location', default="", type=str);
 	forum_id = request.args.get('forum_id', default=0, type=int);
 	if not forum_id:
 		return '{"error": "Missing forum id"}';
+	if (faks != "fri" and faks != "fmf"): return '{"error": "Invalid location"}';
 
-	if location == "fmf":
-		faks = fmf;
-	elif location == "fri":
-		faks = fri;
-	else:
-		return '{"error": "Invalid location"}';
-
-	faks["cookie"] = get_cookie(faks["URL"]["login"]);
-	posts = find_posts(faks["URL"]["forum"]+str(forum_id), faks["cookie"]);
+	cookies[faks] = get_cookie(url(faks, "login"));
+	posts = find_posts(url(faks,"forum",forum_id), cookies[faks]);
 	return json.dumps(posts);
 
 @app.route('/getPostDetails', methods=['GET'])
 def get_post_details():
-	location = request.args.get('location', default="", type=str);
+	faks = request.args.get('location', default="", type=str);
 	post_id = request.args.get('post_id', default=0, type=int);
 	if not post_id:
 		return '{"error": "Missing post id"}';
+	if (faks != "fri" and faks != "fmf"): return '{"error": "Invalid location"}';
 
-	if location == "fmf":
-		faks = fmf;
-	elif location == "fri":
-		faks = fri;
-	else:
-		return '{"error": "Invalid location"}';
-
-	faks["cookie"] = get_cookie(faks["URL"]["login"]);
-	details = find_details(faks["URL"]["discussion"]+str(post_id), faks["cookie"]);
+	cookies[faks] = get_cookie(url(faks, "login"));
+	details = find_details(url(faks,"discussion",post_id), cookies[faks]);
 	return json.dumps(details);
 
 

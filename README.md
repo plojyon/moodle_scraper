@@ -5,21 +5,30 @@ API available at [Heroku](https://fmf-fri-moodle-scraper.herokuapp.com/)
 
 Endpoints:
 ```
-  /getForums
+  /getAssignments - get assignments and quizzes for a subject
+    params:
+      location (req.) - select fri or fmf
+      abbr (optional) - if ommitted, assignments for all subjects are returned
+    returns:
+       {abbr: [ {title, id, type: "assign" | "quiz", subject:{abbr, name}, deadline}, ... ]}
+
+  /getForumList - get forums for a subject
     params:
       location (required) - select fri or fmf
-      abbr (optional) - only return forums for given subject
+      abbr (optional) - if ommitted, forums for all subjects are returned
     returns:
-      [ {title, subject:{abbr, name}, id}, ... ]
-  /getPosts:
+       {abbr: [ {title, id, subject:{abbr, name}}, ... ]}
+
+  /getForum: - returns posts from given forum
     params:
       location (required) - select fri or fmf
-      forum_id (required) - returns posts from given forum
+      forum_id (required)
     returns:
-      [ {title, author, timestamp (last submission), id}, ... ]
+      [ {title, id, author, last_submission}, ... ]
+
   /getPostDetails:
     params:
-      location (required)
+      location (required) - fri or fmf
       post_id (required)
     returns:
       [
