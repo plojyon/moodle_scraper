@@ -1,7 +1,8 @@
 from datetime import datetime;
 from bs4 import BeautifulSoup;
 from flask import Flask, json, request;
-import datetime;
+from dateutil.relativedelta import relativedelta;
+from datetime import datetime;
 import requests;
 import json;
 import random;
@@ -44,35 +45,57 @@ courses = {
 urls = {
 	"login":  "/login/index.php",
 	"course": "/course/view.php?id=", # append course id
-	"forum":  "/mod/forum/view.php?id=", # append id
-	"assign":  "/mod/assign/view.php?id=", # append id
-	"quiz":  "/mod/quiz/view.php?id=", # append id
-	"discussion": "/mod/forum/discuss.php?d=" # ?d= is NOT a typo!
+	"forum":  "/mod/forum/view.php?id=", # append forum id
+	"assign":  "/mod/assign/view.php?id=", # -\\-
+	"quiz":  "/mod/quiz/view.php?id=", # -\\-
+	"discussion": "/mod/forum/discuss.php?d=", # ?d= is NOT a typo!
+	"calendar": "/calendar/view.php?view=month&time=" # append month timstamp
 }
 
-cookies = {"fri": "", "fmf": ""}
+def now():
+	return int(datetime.timestamp(datetime.now()));
+def prev_month():
+	return int(datetime.timestamp(datetime.now() - relativedelta(months=1)));
+def next_month():
+	return int(datetime.timestamp(datetime.now() + relativedelta(months=1)));
 
 def url(location, type, id=""):
 	return "https://ucilnica."+location+".uni-lj.si"+urls[type]+str(id);
 
-def find_forums(course_url, cookie):
+def find_deadlines(faks, cookie, type, time=""):
+	c = requests.get(url(faks, "calendar")+str(time), headers={"Cookie":cookie}).content.decode("utf-8");
+	soup = BeautifulSoup(c, 'html.parser');
+	anchors = soup.find_all('a', class_="aalink day");
+	results = {};
+	for a in anchors:
+		timestamp = a["data-timestamp"];
+		candidates = a.parent.find_all("a", href=True);
+		for cand in candidates:
+			if url(faks, type) in cand["href"]:
+				id = re.search(re.escape(urls[type])+r"(\d+)", cand["href"])[1];
+				if not id in results: results[id] = {}
+				event_type = cand.find_parent('li')["data-event-eventtype"] # "open" | "close"
+				results[id][event_type] = timestamp
+	return results;
+
+def find_in_course(course_url, cookie, type):
 	c = requests.get(course_url, headers={"Cookie":cookie}).content.decode("utf-8");
 	soup = BeautifulSoup(c, 'html.parser');
 	anchors = soup.find_all('a', href=True);
-	forums = [];
+	results = [];
 	for a in anchors:
-		if urls["forum"] in a["href"]:
+		if urls[type] in a["href"]:
 			if "#unread" in a["href"]: continue;
 			try:
-				id = re.search(re.escape(urls["forum"])+r"(\d+)", a["href"])[1];
+				id = re.search(re.escape(urls[type])+r"(\d+)", a["href"])[1];
 				title = a.find(class_="instancename").text;
 			except:
 				title = id = "error";
 
-			forums.append({"title": title, "id": id});
-	if len(forums) == 0:
-		print("No forums found. Invalid credentials or subject has no forums? Course: "+course_url);
-	return forums;
+			results.append({"title": title, "id": id});
+	if len(results) == 0:
+		print("No "+type+" found. Invalid credentials or subject has no "+type+"? Course: "+course_url);
+	return results;
 
 def find_posts(forum_url, cookie):
 	c = requests.get(forum_url, headers={"Cookie":cookie}).content.decode("utf-8");
@@ -132,7 +155,7 @@ def find_replies(article):
 	author = article.find("div").find("header").find("a").text;
 
 	t = article.find("div").find("header").find("time")["datetime"];
-	time = datetime.datetime.strptime(t[:-3]+t[-2:], "%Y-%m-%dT%H:%M:%S%z");
+	time = datetime.strptime(t[:-3]+t[-2:], "%Y-%m-%dT%H:%M:%S%z");
 	timestamp = int(time.timestamp());
 
 	post_container = article.find("div").find(class_="post-content-container");
@@ -177,23 +200,73 @@ def get_cookie(login_url):
 	print("Got login cookie: "+cookie);
 	return cookie;
 
+def assign_deadlines(assignments, deadlines):
+	for abbr in assignments:
+		for ass in assignments[abbr]: # hehe ass
+			if ass["id"] not in deadlines: continue;
+			if "timestamps" not in ass: ass["timestamps"] = {};
+			ass["timestamps"] |= deadlines[ass["id"]];
+
+def get_course_item(faks, filter_abbr, cookie, type):
+	results = {};
+	for course_id in courses[faks]:
+		abbr = courses[faks][course_id]["abbr"];
+		if filter_abbr and abbr != filter_abbr: continue;
+		results[abbr] = find_in_course(url(faks,"course",course_id), cookie, type)
+	return results;
+
+@app.route('/getDeadlines', methods=['GET'])
+def get_deadlines(faks="", cookie="", type="assign", time=""):
+	type = request.args.get('type', default=type, type=str);
+	faks = request.args.get('location', default=faks, type=str);
+	if (faks != "fri" and faks != "fmf"): return '{"error": "Invalid location"}';
+	if not cookie: cookie = get_cookie(url(faks, "login"));
+	return json.dumps(find_deadlines(faks, cookie, type, time))
+
+def append_deadlines_to_submissions(type, submissions, faks, cookie, fetch_deadlines):
+	# get list of submissions (without deadlines)
+	if fetch_deadlines:
+		# add this month's deadlines
+		deadlines = json.loads(get_deadlines(faks, cookie, type, now()));
+		assign_deadlines(submissions, deadlines);
+		# add next month's deadlines
+		deadlines = json.loads(get_deadlines(faks, cookie, type, next_month()));
+		assign_deadlines(submissions, deadlines);
+		# add last month's deadlines
+		deadlines = json.loads(get_deadlines(faks, cookie, type, prev_month()));
+		assign_deadlines(submissions, deadlines);
+	return submissions;
+
+@app.route('/getQuizzes', methods=['GET'])
+def get_quizzes():
+	faks = request.args.get('location', default="", type=str);
+	filter_abbr = request.args.get('abbr', default="", type=str);
+	fetch_deadlines = request.args.get('deadlines', default=False, type=bool);
+	if (faks != "fri" and faks != "fmf"): return '{"error": "Invalid location"}';
+	cookie = get_cookie(url(faks, "login"));
+
+	quizzes = get_course_item(faks, filter_abbr, cookie, "quiz");
+	return json.dumps(append_deadlines_to_submissions("quiz", quizzes, faks, cookie, fetch_deadlines));
+
 @app.route('/getAssignments', methods=['GET'])
 def get_assignments():
-	return '{"error": "todo"}';
+	faks = request.args.get('location', default="", type=str);
+	filter_abbr = request.args.get('abbr', default="", type=str);
+	fetch_deadlines = request.args.get('deadlines', default=False, type=bool);
+	if (faks != "fri" and faks != "fmf"): return '{"error": "Invalid location"}';
+	cookie = get_cookie(url(faks, "login"));
+
+	assignments = get_course_item(faks, filter_abbr, cookie, "assign");
+	return json.dumps(append_deadlines_to_submissions("assign", assignments, faks, cookie, fetch_deadlines));
 
 @app.route('/getForumList', methods=['GET'])
 def get_forum_list():
 	faks = request.args.get('location', default="", type=str);
 	filter_abbr = request.args.get('abbr', default="", type=str);
 	if (faks != "fri" and faks != "fmf"): return '{"error": "Invalid location"}';
+	cookie = get_cookie(url(faks, "login"));
 
-	forums = {};
-	cookies[faks] = get_cookie(url(faks, "login"));
-	for course_id in courses[faks]:
-		abbr = courses[faks][course_id]["abbr"];
-		if filter_abbr and abbr != filter_abbr: continue;
-		forums[abbr] = find_forums(url(faks,"course",course_id), cookies[faks]);
-	return json.dumps(forums);
+	return json.dumps(get_course_item(faks, filter_abbr, cookie, "forum"))
 
 @app.route('/getForum', methods=['GET'])
 def get_forum():
@@ -202,10 +275,9 @@ def get_forum():
 	if not forum_id:
 		return '{"error": "Missing forum id"}';
 	if (faks != "fri" and faks != "fmf"): return '{"error": "Invalid location"}';
+	cookie = get_cookie(url(faks, "login"));
 
-	cookies[faks] = get_cookie(url(faks, "login"));
-	posts = find_posts(url(faks,"forum",forum_id), cookies[faks]);
-	return json.dumps(posts);
+	return json.dumps(find_posts(url(faks,"forum",forum_id), cookie));
 
 @app.route('/getPostDetails', methods=['GET'])
 def get_post_details():
@@ -214,10 +286,9 @@ def get_post_details():
 	if not post_id:
 		return '{"error": "Missing post id"}';
 	if (faks != "fri" and faks != "fmf"): return '{"error": "Invalid location"}';
+	cookie = get_cookie(url(faks, "login"));
 
-	cookies[faks] = get_cookie(url(faks, "login"));
-	details = find_details(url(faks,"discussion",post_id), cookies[faks]);
-	return json.dumps(details);
+	return json.dumps(find_details(url(faks,"discussion",post_id), cookie));
 
 
 @app.errorhandler(500)
