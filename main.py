@@ -17,6 +17,33 @@ print("Using credentials of "+USERNAME);
 
 courses = {
 	"fmf": {
+		76: {
+			"name": "Analiza 2",
+			"abbr": "A2"
+		},
+		78: {
+			"name": "Diskretne strukture 2",
+			"abbr": "DS2"
+		},
+		79: {
+			"name": "Linearna algebra",
+			"abbr": "LINALG"
+		}
+	},
+	"fri": {
+		47: {
+			"name": "Programiranje 2",
+			"abbr": "P2"
+		},
+		59: {
+			"name": "Arhitektura računalniških sistemov",
+			"abbr": "ARS"
+		}
+	}
+}
+'''
+1. semester
+	"fmf": {
 		75: {
 			"name": "Analiza 1",
 			"abbr": "A1"
@@ -40,7 +67,8 @@ courses = {
 			"abbr": "P1"
 		}
 	}
-}
+'''
+
 
 urls = {
 	"login":  "/login/index.php",
