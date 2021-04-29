@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup;
 from flask import Flask, json, request;
 from dateutil.relativedelta import relativedelta;
 from datetime import datetime;
+from decouple import config; # env variables
 import requests;
 import json;
 import random;
@@ -11,9 +12,16 @@ import re; #regex
 import os;
 app = Flask(__name__);
 
-USERNAME = os.environ.get('USERNAME');
-PASSWORD = os.environ.get('PASSWORD');
+USERNAME = config('USERNAME');
+PASSWORD = config('PASSWORD');
 print("Using credentials of "+USERNAME);
+
+try:
+	PORT = int(config('PORT')) or 5000;
+except:
+	PORT = 5000;
+print("Using port "+str(PORT));
+
 
 courses = {
 	"fmf": {
@@ -329,9 +337,4 @@ def err404(e):
 
 
 if __name__ == '__main__':
-	try:
-		PORT = int(os.environ.get('PORT', 5000));
-	except:
-		PORT = 5000;
-	print("Using port "+str(PORT));
 	app.run(port=PORT);
